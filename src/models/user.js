@@ -9,7 +9,13 @@ const userSchema = mongoose.Schema({
     },
     age : {
         type: Number
-    }
+    },
+    emailId : {
+        type : String
+    },
+    password :{
+      type : String
+     }
 })
 
 module.exports = mongoose.model("User", userSchema)
