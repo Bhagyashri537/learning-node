@@ -2,28 +2,59 @@ const express = require("express");
 const connectDB = require("./config/database");
 const User = require("./models/user");
 const user = require("./models/user");
+const { ValidateSignUpData } = require("./Utils/Validation");
+const bcrypt = require("bcrypt");
 
 const app = express();
 
 app.use(express.json());
 
 app.post("/signup", async (req, res) => {
-  //console.log(req.body)
+  try {
+    //validation of data
+    ValidateSignUpData(req);
 
-  //creating new instance of an user model throgh postman
+    const { firstName, lastName, emailId, password } = req.body;
 
-  const user = new User(req.body)
+    //incrypting a password
+    const passwordHash = await bcrypt.hash(password, 10);
+    console.log(passwordHash);
 
-  try{
-     await user.save()
-     res.send("user added succesfully")
+    //creating new instance of an user model throgh postman
+    const user = new User({
+      firstName,
+      lastName,
+      emailId,
+      password: passwordHash,
+    });
+
+    await user.save();
+    res.send("user added succesfully");
+  } catch (err) {
+    res.status(400).send("error saving the user" + err.message);
   }
-  catch(err){
-     res.status(400).send("error saving the user" + err.message)
-  }
-
-  
 });
+
+//login 
+app.post("/login", async(req, res) => {
+  try{
+     const {emailId , password} = req.body;
+     //checking emailid is present or not
+     const user = await User.findOne({emailId : emailId})
+     if(!user){
+      throw new Error("Email is present")
+     }
+
+     const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (isPasswordValid) {
+      res.send("Login successful");
+    } else {
+      throw new Error("Invalid password");
+    }
+  } catch (err) {
+    res.status(400).send("Error: " + err.message);
+  }
+})
 
 // Get user by email
 app.get("/user", async (req, res) => {
@@ -47,7 +78,6 @@ app.get("/user", async (req, res) => {
   }
 });
 
-
 // Feed API - GET /feed - get all the users from the database
 app.get("/feed", async (req, res) => {
   try {
@@ -57,7 +87,6 @@ app.get("/feed", async (req, res) => {
     res.status(400).send("Something went wrong ");
   }
 });
-
 
 //delete the user
 app.delete("/user", async (req, res) => {
@@ -75,24 +104,20 @@ app.delete("/user", async (req, res) => {
   }
 });
 
-
 //update user data
 app.patch("/user", async (req, res) => {
-   const userId = req.body.userId
-   const data = req.body;
+  const userId = req.body.userId;
+  const data = req.body;
+  runValidator: true;
 
-   try{
-     await User.findByIdAndUpdate({_id: userId}, data)
-     res.send("data updated sucessfully")
-   }
-   catch (err) {
+  try {
+    await User.findByIdAndUpdate({ _id: userId }, data);
+    res.send("data updated sucessfully");
+  } catch (err) {
     console.error("Error deleting user:", err.message); // Log error details
     res.status(400).send("Something went wrong");
   }
-})
-
-
-
+});
 
 connectDB()
   .then(() => {
