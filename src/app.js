@@ -1,26 +1,33 @@
 const express = require("express");
 const connectDB = require("./config/database");
-const User = require("./models/user");
-const user = require("./models/user");
+//const { User } = require("./models/user");
 const { ValidateSignUpData } = require("./Utils/Validation");
 const bcrypt = require("bcrypt");
+const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
+const { UserAuth } = require("./middlewares/UserAuth");
+const User = require("./models/user");
+
 
 const app = express();
 
 app.use(express.json());
+app.use(cookieParser());
 
+// Signup
 app.post("/signup", async (req, res) => {
   try {
-    //validation of data
     ValidateSignUpData(req);
 
     const { firstName, lastName, emailId, password } = req.body;
 
-    //incrypting a password
-    const passwordHash = await bcrypt.hash(password, 10);
-    console.log(passwordHash);
+    const existingUser = await User.findOne({ emailId });
+    if (existingUser) {
+      throw new Error("Email already exists");
+    }
 
-    //creating new instance of an user model throgh postman
+    const passwordHash = await bcrypt.hash(password, 10);
+
     const user = new User({
       firstName,
       lastName,
@@ -29,31 +36,61 @@ app.post("/signup", async (req, res) => {
     });
 
     await user.save();
-    res.send("user added succesfully");
+    res.send("User added successfully");
   } catch (err) {
-    res.status(400).send("error saving the user" + err.message);
+    res.status(400).send("Error saving the user: " + err.message);
   }
 });
 
-//login 
-app.post("/login", async(req, res) => {
-  try{
-     const {emailId , password} = req.body;
-     //checking emailid is present or not
-     const user = await User.findOne({emailId : emailId})
-     if(!user){
-      throw new Error("Email is present")
-     }
+// Login
+app.post("/login", async (req, res) => {
+  try {
+    const { emailId, password } = req.body;
 
-     const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Debugging logs
+    console.log("User model:", User);
+    console.log("Request body:", req.body);
+
+    // Check if email exists
+    const user = await User.findOne({ emailId: emailId });
+    console.log("User found:", user);
+
+    if (!user) {
+      throw new Error("Invalid credentials");
+    }
+
+    const isPasswordValid = await user.validatePassword(password);
     if (isPasswordValid) {
-      res.send("Login successful");
+      const token = await user.getJWT()
+      // Add the token to cookie and send the response back to the user
+      res.cookie("token", token);
+      res.send("Login Successful!!!");
     } else {
-      throw new Error("Invalid password");
+      throw new Error("Invalid credentials");
     }
   } catch (err) {
-    res.status(400).send("Error: " + err.message);
+    res.status(400).send("ERROR : " + err.message);
   }
+});
+
+
+//update profile
+app.get("/profile", UserAuth,  async (req, res) => {
+  try {
+      const user = req.user;
+    res.send(user);
+  } catch (err) {
+    res.status(400).send("ERROR : " + err.message);
+  }
+});
+
+
+//sending connection request
+app.post("/sendconnectionreq", UserAuth, async(req, res) => {
+  const user = req.user
+
+  console.log("sendfing conncetion")
+  res.send(user.firstName + "send a connection req send")
 })
 
 // Get user by email
